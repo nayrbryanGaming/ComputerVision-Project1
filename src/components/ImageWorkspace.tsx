@@ -57,7 +57,7 @@ const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => 
     const edges = proc.applySobelOperator(filtered);
 
     // Render to canvases
-    const render = (ref: React.RefObject<HTMLCanvasElement>, data: proc.ImageDataWrapper) => {
+    const render = (ref: React.RefObject<HTMLCanvasElement | null>, data: proc.ImageDataWrapper) => {
       if (ref.current) {
         const ctx = ref.current.getContext('2d');
         if (ctx) {
