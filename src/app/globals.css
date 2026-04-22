@@ -34,59 +34,52 @@ h1, h2, h3 {
 }
 
 .glass-card {
-  background: var(--card-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(20, 20, 20, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--glass-border);
-  border-radius: 24px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 20px;
+  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+  will-change: transform, border-color;
 }
 
 .glass-card:hover {
-  border-color: rgba(0, 242, 255, 0.3);
-  box-shadow: 0 8px 32px 0 var(--glass-glow);
-}
-
-.glow-text {
-  text-shadow: 0 0 10px rgba(0, 242, 255, 0.5);
-  background: linear-gradient(90deg, #00f2ff, #7000ff);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  transform: translateY(-2px);
+  border-color: rgba(0, 242, 255, 0.4);
 }
 
 button {
   cursor: pointer;
   border: none;
-  border-radius: 12px;
-  padding: 12px 24px;
+  border-radius: 10px;
+  padding: 10px 20px;
   font-weight: 600;
-  transition: transform 0.2s, opacity 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
   color: white;
   font-family: 'Outfit', sans-serif;
-}
-
-button:hover {
-  transform: translateY(-2px);
-  opacity: 0.9;
-}
-
-button:active {
-  transform: translateY(0);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: clamp(0.8rem, 2vw, 0.9rem);
+  width: auto;
+  min-width: 140px;
 }
 
 .container {
-  max-width: 1400px;
+  max-width: 100%;
+  width: 95%;
   margin: 0 auto;
-  padding: 40px 20px;
+  padding: 20px 0;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 24px;
-  margin-top: 40px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  width: 100%;
 }
 
 .canvas-container {
@@ -95,10 +88,20 @@ button:active {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #111;
-  border-radius: 16px;
+  background: #0a0a0a;
+  border-radius: 12px;
   overflow: hidden;
   position: relative;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
 }
 
 canvas {
