@@ -1,24 +1,29 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Computer Vision Class - Project 01
+## Noise, Filtering & Edge Detection Analysis
 
-## Getting Started
+**Kelompok 5:**
+- 2361020 – VENILIA DINA MINARTI
+- 2361021 – VINCENTIUS BRYAN KWANDOU
+- 2361022 – VINCENTLEE EDBERT MARKIONES
+- 2361023 – RENDY ALFIN MAMINTADA
+- 2361024 – FELISITAS NATASYA LADY CLAUDIA
 
-First, run the development server:
+### Live Demo
+[https://computervision-kelompok5-1.vercel.app/](https://computervision-kelompok5-1.vercel.app/)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+### Deskripsi Proyek
+Aplikasi ini adalah platform eksperimen untuk memahami hubungan antara noise (Salt & Pepper, Gaussian), teknik filtering (Median, Mean), dan algoritma deteksi tepi (Sobel). Seluruh algoritma pengolahan citra diimplementasikan secara manual menggunakan TypeScript/JavaScript pada elemen Canvas untuk menjamin transparansi akademik.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Fitur Utama
+- **Real-Time Processing**: Animasi ringan dan responsif untuk pengolahan citra instan.
+- **Flexible UI**: Desain yang dioptimalkan untuk berbagai ukuran layar (Responsive).
+- **Public Access**: Repositori dan deployment dikonfigurasi untuk akses publik bagi Dosen dan Kementrian.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Cara Penggunaan
+1. Pilih gambar contoh atau unggah gambar sendiri.
+2. Atur intensitas noise dan jenis filter melalui panel kontrol.
+3. Amati hasil deteksi tepi pada panel akhir.
+4. Baca analisis live untuk memahami fenomena yang terjadi pada citra.
 
 ## Learn More
 
