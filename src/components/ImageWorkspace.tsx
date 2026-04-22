@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import * as proc from '@/lib/processor';
+import * as proc from '../lib/processor';
 
 interface ImageWorkspaceProps {
   defaultImageUrls: string[];
