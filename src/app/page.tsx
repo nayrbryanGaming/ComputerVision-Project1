@@ -1,4 +1,4 @@
-import ImageWorkspace from '@/components/ImageWorkspace';
+import ImageWorkspace from '../components/ImageWorkspace';
 
 export default function Home() {
   const defaultImages = [
