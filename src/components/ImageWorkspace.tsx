@@ -61,7 +61,7 @@ const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => 
       if (ref.current) {
         const ctx = ref.current.getContext('2d');
         if (ctx) {
-          const imgData = new ImageData(data.data, data.width, data.height);
+          const imgData = new ImageData(data.data as any, data.width, data.height);
           ctx.putImageData(imgData, 0, 0);
         }
       }
