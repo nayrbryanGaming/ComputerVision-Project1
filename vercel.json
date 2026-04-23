@@ -1,8 +1,5 @@
 {
   "cleanUrls": true,
   "framework": "nextjs",
-  "regions": ["sin1"],
-  "deploymentProtection": {
-    "protectionMode": "off"
-  }
+  "regions": ["sin1"]
 }
