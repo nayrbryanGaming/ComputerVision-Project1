@@ -217,9 +217,9 @@ const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => 
              </div>
 
              <div className="grid md:grid-cols-3 gap-8">
-                <ParamSlider label="Intensity" value={Math.round(noiseDensity * 100) + "%"} min={0.05} max={0.4} step={0.01} current={noiseDensity} onChange={(v) => setNoiseDensity(v)} />
-                <ParamSlider label="Sigma (A)" value={sigma.toFixed(1)} min={0.5} max={3.0} step={0.1} current={sigma} onChange={(v) => setSigma(v)} />
-                <ParamSlider label="Kernel (B)" value={medianSize + "x" + medianSize} min={3} max={9} step={2} current={medianSize} onChange={(v) => setMedianSize(v)} />
+                <ParamSlider label="Intensity" value={Math.round(noiseDensity * 100) + "%"} min={0.05} max={0.4} step={0.01} current={noiseDensity} onChange={(v: number) => setNoiseDensity(v)} />
+                <ParamSlider label="Sigma (A)" value={sigma.toFixed(1)} min={0.5} max={3.0} step={0.1} current={sigma} onChange={(v: number) => setSigma(v)} />
+                <ParamSlider label="Kernel (B)" value={medianSize + "x" + medianSize} min={3} max={9} step={2} current={medianSize} onChange={(v: number) => setMedianSize(v)} />
              </div>
           </div>
         </div>
