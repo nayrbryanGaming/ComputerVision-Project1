@@ -8,6 +8,7 @@ interface ImageWorkspaceProps {
 }
 
 const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => {
+  // --- STATE ---
   const [selectedImage, setSelectedImage] = useState<string>(defaultImageUrls[0]);
   const [noiseType, setNoiseType] = useState<'salt_pepper' | 'gaussian'>('salt_pepper');
   const [noiseDensity, setNoiseDensity] = useState(0.15);
@@ -17,6 +18,7 @@ const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => 
   const [showShareToast, setShowShareToast] = useState(false);
   const [imageWrapper, setImageWrapper] = useState<proc.ImageDataWrapper | null>(null);
 
+  // --- REFS ---
   const canvasRefs = {
     original: useRef<HTMLCanvasElement>(null),
     noisy: useRef<HTMLCanvasElement>(null),
@@ -26,7 +28,7 @@ const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => 
     edgeM: useRef<HTMLCanvasElement>(null),
   };
 
-  // Sync state from URL hash
+  // --- HASH SYNC ---
   useEffect(() => {
     const hash = typeof window !== 'undefined' ? window.location.hash.substring(1) : '';
     if (hash) {
@@ -45,7 +47,6 @@ const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => 
     }
   }, [defaultImageUrls]);
 
-  // Update URL hash
   useEffect(() => {
     const params = new URLSearchParams();
     params.set('nt', noiseType);
@@ -61,12 +62,13 @@ const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => 
     }
   }, [noiseType, noiseDensity, sigma, medianSize, selectedImage, defaultImageUrls]);
 
+  // --- CORE CV PIPELINE ---
   const processImages = useCallback(async (base: proc.ImageDataWrapper) => {
     setIsProcessing(true);
     
-    // Use setTimeout to allow UI thread to breathe
+    // Defer to prevent UI blocking
     setTimeout(() => {
-      // 1. Generate Noise
+      // STEP 2: Generate Noise
       let noisy: proc.ImageDataWrapper;
       if (noiseType === 'salt_pepper') {
         noisy = proc.addSaltAndPepperNoise(base, noiseDensity);
@@ -74,11 +76,11 @@ const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => 
         noisy = proc.addGaussianNoise(base, noiseDensity * 50);
       }
 
-      // 2. Apply Filters
+      // STEP 3: Filtering (Exp A & B)
       const gaussianFiltered = proc.applyGaussianFilter(noisy, sigma);
       const medianFiltered = proc.applyMedianFilter(noisy, medianSize);
 
-      // 3. Edge Detection
+      // STEP 4: Edge Detection (Sobel A & B)
       const edgesG = proc.applySobelOperator(gaussianFiltered);
       const edgesM = proc.applySobelOperator(medianFiltered);
 
@@ -101,10 +103,10 @@ const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => 
       render(canvasRefs.edgeM, edgesM);
 
       setIsProcessing(false);
-    }, 50);
+    }, 10);
   }, [noiseType, noiseDensity, sigma, medianSize]);
 
-  // Load and Resize Image
+  // --- IMAGE LOADING ---
   useEffect(() => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -122,8 +124,8 @@ const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => 
         height: img.height,
       };
 
-      // PERFORMANCE: Resizing for fluid real-time demo
-      wrapper = proc.resizeImageData(wrapper, 500);
+      // PERFORMANCE: Downscale to ensure "Real-Time" feels fast
+      wrapper = proc.resizeImageData(wrapper, 450);
       setImageWrapper(wrapper);
 
       if (canvasRefs.original.current) {
@@ -137,14 +139,14 @@ const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => 
     };
   }, [selectedImage]);
 
-  // Trigger processing when parameters change
   useEffect(() => {
     if (imageWrapper) {
-      const timeout = setTimeout(() => processImages(imageWrapper), 200);
+      const timeout = setTimeout(() => processImages(imageWrapper), 150);
       return () => clearTimeout(timeout);
     }
   }, [imageWrapper, processImages]);
 
+  // --- HANDLERS ---
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -165,147 +167,175 @@ const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => 
   };
 
   return (
-    <div className="animate-fade-in space-y-10 pb-20">
-      <div className="glass-card p-6 md:p-10 text-center relative overflow-hidden border-b-4 border-cyan-500/30">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-cyan-500 opacity-5 blur-[120px] -mr-40 -mt-40"></div>
-        <div className="flex flex-col items-center gap-6 relative z-10">
-          <div className="flex items-center gap-4 mb-2">
-            <div className="p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 shadow-xl shadow-cyan-500/10">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-cyan-400">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-              </svg>
-            </div>
-            <h3 className="text-3xl font-black tracking-tight text-white/90">Eksperimen Citra Digital</h3>
+    <div className="animate-fade-in space-y-12 pb-20 px-4 max-w-[1600px] mx-auto">
+      {/* HEADER SECTION */}
+      <div className="glass-card p-6 md:p-12 text-center relative overflow-hidden border-b-4 border-cyan-500/40">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500 opacity-10 blur-[150px] -mr-48 -mt-48"></div>
+        
+        <div className="flex flex-col items-center gap-8 relative z-10">
+          <div className="space-y-4">
+            <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white to-white/40">
+              ANALISIS HUBUNGAN NOISE & FILTER
+            </h1>
+            <p className="text-sm font-bold opacity-40 uppercase tracking-[0.5em]">Tugas 1: Pengolahan Citra Digital - Kelompok 5</p>
           </div>
           
-          <div className="flex flex-wrap justify-center gap-4">
+          <div className="flex flex-wrap justify-center gap-6">
+            {/* UPLOAD BUTTON */}
             <label className="group relative cursor-pointer">
               <input type="file" className="hidden" accept="image/*" onChange={handleUpload} />
-              <span className="bg-cyan-600 hover:bg-cyan-500 flex items-center gap-2 px-8 py-4 rounded-2xl font-black transition-all shadow-xl shadow-cyan-900/40 active:scale-95">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                UPLOAD GAMBAR
-              </span>
+              <div className="bg-cyan-600 hover:bg-cyan-500 flex items-center gap-3 px-10 py-5 rounded-2xl font-black transition-all shadow-[0_0_40px_rgba(8,145,178,0.3)] active:scale-95 group-hover:shadow-[0_0_60px_rgba(8,145,178,0.5)]">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                UPLOAD GAMBAR MANUAL
+              </div>
             </label>
 
-            <div className="flex gap-2 p-1 bg-white/5 rounded-2xl border border-white/10">
+            {/* DEFAULT SAMPLES */}
+            <div className="flex gap-2 p-2 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-xl">
               {defaultImageUrls.map((url, i) => (
-                <button key={i} className={`px-6 py-3 rounded-xl font-bold transition-all ${selectedImage === url ? 'bg-white/20 text-white shadow-lg' : 'text-white/40 hover:text-white hover:bg-white/5'}`} onClick={() => setSelectedImage(url)}>
-                  SAMPLE {i + 1}
+                <button 
+                  key={i} 
+                  className={`px-8 py-4 rounded-2xl font-black text-xs transition-all ${selectedImage === url ? 'bg-white text-black shadow-2xl scale-105' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                  onClick={() => setSelectedImage(url)}
+                >
+                  CONTOH {i + 1}
                 </button>
               ))}
             </div>
 
-            <button className="bg-purple-600 hover:bg-purple-500 flex items-center gap-2 px-8 py-4 rounded-2xl font-black transition-all shadow-xl shadow-purple-900/40 active:scale-95" onClick={handleShare}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-              LOCK STATE
+            {/* SHARE/LOCK BUTTON */}
+            <button 
+              className="bg-purple-600 hover:bg-purple-500 flex items-center gap-3 px-10 py-5 rounded-2xl font-black transition-all shadow-[0_0_40px_rgba(147,51,234,0.3)] active:scale-95"
+              onClick={handleShare}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              LOCK & SHARE
             </button>
           </div>
         </div>
       </div>
 
+      {/* PIPELINE GRID - MUST SHOW 6 CARDS AS PER WAJIB */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        <Card title="1. Citra Asli" ref={canvasRefs.original} desc="Original Input" />
-        <Card title={`2. Citra + Noise (${noiseType})`} ref={canvasRefs.noisy} desc={`Density: ${(noiseDensity*100).toFixed(0)}%`} />
-        <Card title="3. Gaussian Filter (A)" ref={canvasRefs.gaussian} desc={`Sigma (σ): ${sigma.toFixed(1)}`} />
-        <Card title="4. Median Filter (B)" ref={canvasRefs.median} desc={`Kernel: ${medianSize}x${medianSize}`} />
-        <Card title="5. Sobel Edge (A)" ref={canvasRefs.edgeG} desc="Detected from Gaussian" accent />
-        <Card title="6. Sobel Edge (B)" ref={canvasRefs.edgeM} desc="Detected from Median" accent />
+        <Card title="1. Gambar Asli" ref={canvasRefs.original} desc="Input citra tanpa gangguan" />
+        <Card title={`2. Gambar + Noise (${noiseType})`} ref={canvasRefs.noisy} desc={`Gangguan artifisial ${(noiseDensity*100).toFixed(0)}%`} />
+        <Card title="3. Hasil Filter A (Gaussian)" ref={canvasRefs.gaussian} desc={`Mereduksi noise dengan σ: ${sigma.toFixed(1)}`} />
+        <Card title="4. Hasil Filter B (Median)" ref={canvasRefs.median} desc={`Mereduksi noise dengan kernel: ${medianSize}x${medianSize}`} />
+        <Card title="5. Hasil Edge A (Sobel)" ref={canvasRefs.edgeG} desc="Deteksi tepi dari Filter Gaussian" accent />
+        <Card title="6. Hasil Edge B (Sobel)" ref={canvasRefs.edgeM} desc="Deteksi tepi dari Filter Median" accent />
       </div>
 
+      {/* CONTROLS & ANALYSIS */}
       <div className="grid lg:grid-cols-3 gap-8">
-        <div className="glass-card p-8 lg:col-span-1 space-y-10 border-t-4 border-cyan-500/20">
-          <div className="space-y-4">
-            <span className="text-[11px] font-black uppercase tracking-[0.3em] text-cyan-400">PILIH MODE NOISE</span>
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => setNoiseType('salt_pepper')} className={`py-4 rounded-xl font-black text-[10px] border transition-all ${noiseType === 'salt_pepper' ? 'bg-cyan-600 border-cyan-400 shadow-xl shadow-cyan-900/40 text-white' : 'bg-white/5 border-white/10 text-white/40 hover:opacity-100'}`}>
-                SALT & PEPPER
-              </button>
-              <button onClick={() => setNoiseType('gaussian')} className={`py-4 rounded-xl font-black text-[10px] border transition-all ${noiseType === 'gaussian' ? 'bg-cyan-600 border-cyan-400 shadow-xl shadow-cyan-900/40 text-white' : 'bg-white/5 border-white/10 text-white/40 hover:opacity-100'}`}>
-                GAUSSIAN
-              </button>
-            </div>
-          </div>
-
+        {/* PARAMETERS */}
+        <div className="glass-card p-8 lg:col-span-1 space-y-12 border-t-4 border-cyan-500/30">
           <div className="space-y-6">
+            <h4 className="text-xs font-black uppercase tracking-[0.4em] text-cyan-400">Konfigurasi Eksperimen</h4>
+            
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-[11px] font-black uppercase tracking-[0.3em] text-white/40">Intensitas Noise</span>
-                <span className="text-cyan-400 font-black text-xs">{Math.round(noiseDensity * 100)}%</span>
+              <span className="text-[10px] font-bold opacity-30 uppercase tracking-widest">Pilih Jenis Noise</span>
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  onClick={() => setNoiseType('salt_pepper')} 
+                  className={`py-4 rounded-2xl font-black text-[10px] border transition-all ${noiseType === 'salt_pepper' ? 'bg-cyan-600 border-cyan-400 text-white shadow-lg' : 'bg-white/5 border-white/10 text-white/30 hover:text-white'}`}
+                >
+                  SALT & PEPPER
+                </button>
+                <button 
+                  onClick={() => setNoiseType('gaussian')} 
+                  className={`py-4 rounded-2xl font-black text-[10px] border transition-all ${noiseType === 'gaussian' ? 'bg-cyan-600 border-cyan-400 text-white shadow-lg' : 'bg-white/5 border-white/10 text-white/30 hover:text-white'}`}
+                >
+                  GAUSSIAN
+                </button>
               </div>
-              <input type="range" min="0.05" max="0.3" step="0.01" value={noiseDensity} onChange={e => setNoiseDensity(parseFloat(e.target.value))} className="w-full" />
             </div>
 
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-[11px] font-black uppercase tracking-[0.3em] text-white/40">Filter A (Sigma)</span>
-                <span className="text-cyan-400 font-black text-xs">{sigma.toFixed(1)}</span>
-              </div>
-              <input type="range" min="0.5" max="3" step="0.1" value={sigma} onChange={e => setSigma(parseFloat(e.target.value))} className="w-full" />
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-[11px] font-black uppercase tracking-[0.3em] text-white/40">Filter B (Kernel)</span>
-                <span className="text-purple-400 font-black text-xs">{medianSize}x{medianSize}</span>
-              </div>
-              <input type="range" min="3" max="7" step="2" value={medianSize} onChange={e => setMedianSize(parseInt(e.target.value))} className="w-full" />
+            <div className="space-y-6 pt-4">
+              <ControlSlider label="Intensitas Noise" value={Math.round(noiseDensity * 100) + "%"} min={0.05} max={0.3} step={0.01} current={noiseDensity} onChange={(v: number) => setNoiseDensity(v)} color="cyan" />
+              <ControlSlider label="Gaussian Sigma (Filter A)" value={sigma.toFixed(1)} min={0.5} max={0.3} step={0.1} current={sigma} onChange={(v: number) => setSigma(v)} color="cyan" />
+              <ControlSlider label="Median Kernel (Filter B)" value={medianSize + "x" + medianSize} min={3} max={7} step={2} current={medianSize} onChange={(v: number) => setMedianSize(v)} color="purple" />
             </div>
           </div>
         </div>
 
-        <div className="glass-card p-8 lg:col-span-2 space-y-6 border-t-4 border-purple-500/20">
-          <div className="flex items-center gap-3 mb-4">
-            <h3 className="text-2xl font-black text-white/90">Analisis Eksperimental</h3>
+        {/* ANALYSIS */}
+        <div className="glass-card p-10 lg:col-span-2 space-y-8 border-t-4 border-purple-500/30">
+          <div className="flex items-center justify-between border-b border-white/10 pb-6">
+            <h3 className="text-3xl font-black tracking-tighter">Analisis Hubungan</h3>
+            <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${isProcessing ? 'bg-yellow-500 text-black animate-pulse' : 'bg-green-500 text-white'}`}>
+              {isProcessing ? 'Processing Pipeline...' : 'System Ready'}
+            </div>
           </div>
           
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="bg-white/5 p-6 rounded-2xl border border-white/5">
-              <h4 className="text-[10px] font-black text-cyan-400 mb-4 tracking-widest uppercase">Karakteristik Filter A</h4>
-              <p className="text-xs opacity-60 leading-loose">
-                Gaussian Filter sangat optimal untuk mereduksi noise terdistribusi normal. Namun, pada noise impulsif (Salt & Pepper), filter ini cenderung menyebarkan noise (smearing) daripada menghilangkannya.
-              </p>
-            </div>
-            <div className="bg-white/5 p-6 rounded-2xl border border-white/5">
-              <h4 className="text-[10px] font-black text-purple-400 mb-4 tracking-widest uppercase">Karakteristik Filter B</h4>
-              <p className="text-xs opacity-60 leading-loose">
-                Median Filter unggul dalam mempertahankan ketajaman tepi citra (Edge Preserving) sambil membuang noise outlier secara total. Sangat direkomendasikan untuk restorasi citra satelit/medis.
-              </p>
-            </div>
+          <div className="grid md:grid-cols-2 gap-8">
+            <AnalysisBlock title="Filter A: Gaussian" color="cyan">
+              Sangat efektif untuk mereduksi noise yang terdistribusi normal (Gaussian). Namun, ia cenderung mengaburkan (blur) tepi objek karena sifat konvolusi linier. Kurang efektif pada Salt & Pepper.
+            </AnalysisBlock>
+            <AnalysisBlock title="Filter B: Median" color="purple">
+              Unggul mutlak dalam menangani Salt & Pepper noise. Sebagai filter non-linier, ia mampu mempertahankan ketajaman tepi (edge preservation) jauh lebih baik daripada Gaussian filter.
+            </AnalysisBlock>
           </div>
 
-          <div className="bg-white/5 p-6 rounded-2xl border-l-4 border-cyan-500">
-             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className={`w-3 h-3 rounded-full ${isProcessing ? 'bg-yellow-400 animate-pulse shadow-lg shadow-yellow-500/50' : 'bg-green-400 shadow-lg shadow-green-500/50'}`}></div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-white/60">Engine Status: {isProcessing ? 'PROCESSING PIPELINE' : 'SYSTEM IDLE'}</span>
-                </div>
-                <span className="text-[10px] font-black opacity-20 tracking-[0.4em]">OPTIMIZED v3.0</span>
-             </div>
+          <div className="bg-white/5 p-8 rounded-3xl border border-white/10 space-y-4">
+            <h5 className="font-black text-sm uppercase tracking-widest text-white/90">Insight Deteksi Tepi (Sobel)</h5>
+            <p className="text-sm opacity-50 leading-relaxed">
+              Hasil **Sobel A vs Sobel B** membuktikan bahwa pemilihan filter sangat krusial. Noise yang tersisa akan dideteksi sebagai "tepi palsu" (artefak), sementara filter yang terlalu kuat akan menghilangkan detail tepi asli. Melalui demo ini, terlihat bahwa **Median Filter** memberikan input yang lebih bersih untuk Sobel pada noise Salt & Pepper.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between text-[10px] font-bold opacity-20 tracking-[0.5em] uppercase pt-4">
+            <span>Manual CV Engine v3.2</span>
+            <span>Optimized for Landscape & Portrait</span>
           </div>
         </div>
       </div>
 
       {showShareToast && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white text-black px-8 py-4 rounded-2xl font-black shadow-2xl z-50 animate-bounce">
-          LINK COPIED TO CLIPBOARD
+        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 bg-white text-black px-10 py-5 rounded-3xl font-black shadow-[0_20px_80px_rgba(255,255,255,0.2)] z-50 animate-bounce">
+          LINK EKSPERIMEN DISALIN!
         </div>
       )}
     </div>
   );
 };
 
+// --- SUB-COMPONENTS ---
+
 const Card = React.forwardRef<HTMLCanvasElement, { title: string; desc?: string; accent?: boolean }>(({ title, desc, accent }, ref) => (
-  <div className={`glass-card p-5 flex flex-col gap-4 ${accent ? 'border-purple-500/40 bg-purple-500/5' : 'bg-white/[0.02]'} hover:bg-white/[0.05] transition-all duration-500`}>
-    <div className="flex justify-between items-center border-b border-white/5 pb-3">
-      <h4 className="font-black text-[10px] uppercase tracking-[0.2em] text-white/80">{title}</h4>
-      <span className="text-[9px] font-bold opacity-30 uppercase">{desc}</span>
+  <div className={`glass-card p-6 flex flex-col gap-6 group hover:bg-white/[0.04] transition-all duration-700 ${accent ? 'border-purple-500/20' : 'border-white/5'}`}>
+    <div className="flex flex-col gap-1 border-b border-white/5 pb-4">
+      <h4 className="font-black text-[11px] uppercase tracking-[0.25em] text-white/90 group-hover:text-cyan-400 transition-colors">{title}</h4>
+      {desc && <span className="text-[9px] font-bold opacity-30 uppercase tracking-tighter">{desc}</span>}
     </div>
-    <div className="canvas-container">
-      <canvas ref={ref} className="w-full h-auto object-contain" />
+    <div className="canvas-container bg-black/40 shadow-inner">
+      <canvas ref={ref} className="w-full h-auto object-contain max-h-[400px]" />
     </div>
   </div>
 ));
-
 Card.displayName = 'Card';
+
+const ControlSlider = ({ label, value, min, max, step, current, onChange, color }: any) => (
+  <div className="space-y-4">
+    <div className="flex justify-between items-center">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">{label}</span>
+      <span className={`text-${color}-400 font-black text-xs bg-${color}-500/10 px-3 py-1 rounded-lg`}>{value}</span>
+    </div>
+    <input 
+      type="range" min={min} max={max} step={step} value={current} 
+      onChange={e => onChange(parseFloat(e.target.value))} 
+      className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-white"
+    />
+  </div>
+);
+
+const AnalysisBlock = ({ title, children, color }: any) => (
+  <div className="space-y-4">
+    <div className="flex items-center gap-3">
+      <div className={`w-2 h-2 rounded-full bg-${color}-500 shadow-[0_0_10px_rgba(255,255,255,0.5)]`}></div>
+      <h5 className={`font-black text-xs uppercase tracking-widest text-${color}-400`}>{title}</h5>
+    </div>
+    <p className="text-xs opacity-60 leading-loose">{children}</p>
+  </div>
+);
 
 export default ImageWorkspace;
