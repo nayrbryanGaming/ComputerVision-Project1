@@ -200,12 +200,12 @@ const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => 
       {/* 🖼️ RESULTS GRID (2 COLUMNS) */}
       <div className="flex-1 space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <ResultCard title="1. ORIGINAL IMAGE" badge="BASELINE" ref={canvasRefs.original} />
-          <ResultCard title={`2. DEGRADED (+${noiseType})`} badge="NOISY" ref={canvasRefs.noisy} />
-          <ResultCard title="3. FILTER A (GAUSSIAN)" badge="EXP-A" ref={canvasRefs.gaussian} />
-          <ResultCard title="4. FILTER B (MEDIAN)" badge="EXP-B" ref={canvasRefs.median} />
-          <ResultCard title="5. SOBEL A (FROM GAUSSIAN)" badge="EDGE-A" ref={canvasRefs.edgeG} accent />
-          <ResultCard title="6. SOBEL B (FROM MEDIAN)" badge="EDGE-B" ref={canvasRefs.edgeM} accent />
+          <ResultCard title="STAGE 01: ORIGINAL IMAGE" badge="BASELINE" ref={canvasRefs.original} />
+          <ResultCard title={`STAGE 02: NOISY IMAGE (+${noiseType})`} badge="DEGRADED" ref={canvasRefs.noisy} />
+          <ResultCard title="STAGE 03: FILTER A (GAUSSIAN)" badge="RESTORED" ref={canvasRefs.gaussian} />
+          <ResultCard title="STAGE 04: FILTER B (MEDIAN)" badge="RESTORED" ref={canvasRefs.median} />
+          <ResultCard title="STAGE 05: EDGE DETECTION A (SOBEL)" badge="ANALYSIS" ref={canvasRefs.edgeG} accent />
+          <ResultCard title="STAGE 06: EDGE DETECTION B (SOBEL)" badge="ANALYSIS" ref={canvasRefs.edgeM} accent />
         </div>
 
         <div className="glass-card p-8 border-t-2 border-white/5 space-y-6">
