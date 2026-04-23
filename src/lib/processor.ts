@@ -12,6 +12,36 @@ export const copyImageData = (imgData: ImageDataWrapper): ImageDataWrapper => {
   };
 };
 
+// --- Utilities ---
+
+export const resizeImageData = (imgData: ImageDataWrapper, maxDim: number = 800): ImageDataWrapper => {
+  if (imgData.width <= maxDim && imgData.height <= maxDim) return imgData;
+
+  const scale = Math.min(maxDim / imgData.width, maxDim / imgData.height);
+  const newWidth = Math.floor(imgData.width * scale);
+  const newHeight = Math.floor(imgData.height * scale);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = imgData.width;
+  canvas.height = imgData.height;
+  const ctx = canvas.getContext('2d')!;
+  const imageData = new ImageData(imgData.data as any, imgData.width, imgData.height);
+  ctx.putImageData(imageData, 0, 0);
+
+  const offscreen = document.createElement('canvas');
+  offscreen.width = newWidth;
+  offscreen.height = newHeight;
+  const oCtx = offscreen.getContext('2d')!;
+  oCtx.drawImage(canvas, 0, 0, newWidth, newHeight);
+
+  const finalData = oCtx.getImageData(0, 0, newWidth, newHeight);
+  return {
+    data: finalData.data,
+    width: newWidth,
+    height: newHeight,
+  };
+};
+
 // --- Noise Generation ---
 
 export const addSaltAndPepperNoise = (imgData: ImageDataWrapper, density: number): ImageDataWrapper => {
@@ -58,64 +88,65 @@ export const applyMedianFilter = (imgData: ImageDataWrapper, size: number = 3): 
   const { data, width, height } = imgData;
   const target = result.data;
   const half = Math.floor(size / 2);
+  const window = new Uint8Array(size * size);
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      const neighborsR: number[] = [];
-      const neighborsG: number[] = [];
-      const neighborsB: number[] = [];
-
-      for (let fy = -half; fy <= half; fy++) {
-        for (let fx = -half; fx <= half; fx++) {
-          const nx = Math.min(width - 1, Math.max(0, x + fx));
-          const ny = Math.min(height - 1, Math.max(0, y + fy));
-          const idx = (ny * width + nx) * 4;
-          neighborsR.push(data[idx]);
-          neighborsG.push(data[idx + 1]);
-          neighborsB.push(data[idx + 2]);
+      for (let c = 0; c < 3; c++) {
+        let k = 0;
+        for (let fy = -half; fy <= half; fy++) {
+          for (let fx = -half; fx <= half; fx++) {
+            const nx = Math.min(width - 1, Math.max(0, x + fx));
+            const ny = Math.min(height - 1, Math.max(0, y + fy));
+            window[k++] = data[(ny * width + nx) * 4 + c];
+          }
         }
+        window.sort();
+        target[(y * width + x) * 4 + c] = window[Math.floor(window.length / 2)];
       }
-
-      neighborsR.sort((a, b) => a - b);
-      neighborsG.sort((a, b) => a - b);
-      neighborsB.sort((a, b) => a - b);
-
-      const mid = Math.floor(neighborsR.length / 2);
-      const tidx = (y * width + x) * 4;
-      target[tidx] = neighborsR[mid];
-      target[tidx + 1] = neighborsG[mid];
-      target[tidx + 2] = neighborsB[mid];
     }
   }
   return result;
 };
 
-export const applyMeanFilter = (imgData: ImageDataWrapper, size: number = 3): ImageDataWrapper => {
+export const applyGaussianFilter = (imgData: ImageDataWrapper, sigma: number = 1.0): ImageDataWrapper => {
+  const size = Math.ceil(sigma * 3) * 2 + 1;
+  const kernel = new Float32Array(size * size);
+  const half = Math.floor(size / 2);
+  let sum = 0;
+
+  for (let y = -half; y <= half; y++) {
+    for (let x = -half; x <= half; x++) {
+      const g = Math.exp(-(x * x + y * y) / (2 * sigma * sigma)) / (2 * Math.PI * sigma * sigma);
+      kernel[(y + half) * size + (x + half)] = g;
+      sum += g;
+    }
+  }
+
+  for (let i = 0; i < kernel.length; i++) kernel[i] /= sum;
+
   const result = copyImageData(imgData);
   const { data, width, height } = imgData;
   const target = result.data;
-  const half = Math.floor(size / 2);
-  const total = size * size;
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      let sumR = 0, sumG = 0, sumB = 0;
-
+      let r = 0, g = 0, b = 0;
       for (let fy = -half; fy <= half; fy++) {
         for (let fx = -half; fx <= half; fx++) {
           const nx = Math.min(width - 1, Math.max(0, x + fx));
           const ny = Math.min(height - 1, Math.max(0, y + fy));
+          const weight = kernel[(fy + half) * size + (fx + half)];
           const idx = (ny * width + nx) * 4;
-          sumR += data[idx];
-          sumG += data[idx + 1];
-          sumB += data[idx + 2];
+          r += data[idx] * weight;
+          g += data[idx + 1] * weight;
+          b += data[idx + 2] * weight;
         }
       }
-
       const tidx = (y * width + x) * 4;
-      target[tidx] = sumR / total;
-      target[tidx + 1] = sumG / total;
-      target[tidx + 2] = sumB / total;
+      target[tidx] = r;
+      target[tidx + 1] = g;
+      target[tidx + 2] = b;
     }
   }
   return result;
@@ -127,30 +158,19 @@ export const applySobelOperator = (imgData: ImageDataWrapper): ImageDataWrapper 
   const { data, width, height } = imgData;
   const grayscale = new Uint8ClampedArray(width * height);
   
-  // Convert to grayscale first for easier processing
   for (let i = 0; i < data.length; i += 4) {
-    grayscale[i / 4] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    grayscale[i / 4] = (data[i] + data[i+1] + data[i+2]) / 3;
   }
 
   const result = copyImageData(imgData);
   const target = result.data;
 
-  const kx = [
-    -1, 0, 1,
-    -2, 0, 2,
-    -1, 0, 1
-  ];
-  const ky = [
-    -1, -2, -1,
-     0,  0,  0,
-     1,  2,  1
-  ];
+  const kx = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
+  const ky = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
 
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
-      let gx = 0;
-      let gy = 0;
-
+      let gx = 0, gy = 0;
       for (let fy = -1; fy <= 1; fy++) {
         for (let fx = -1; fx <= 1; fx++) {
           const val = grayscale[(y + fy) * width + (x + fx)];
@@ -159,11 +179,12 @@ export const applySobelOperator = (imgData: ImageDataWrapper): ImageDataWrapper 
         }
       }
 
-      const mag = Math.min(255, Math.sqrt(gx * gx + gy * gy));
+      const mag = Math.sqrt(gx * gx + gy * gy);
       const tidx = (y * width + x) * 4;
-      target[tidx] = mag;
-      target[tidx + 1] = mag;
-      target[tidx + 2] = mag;
+      const pixelVal = Math.min(255, mag);
+      target[tidx] = pixelVal;
+      target[tidx + 1] = pixelVal;
+      target[tidx + 2] = pixelVal;
       target[tidx + 3] = 255;
     }
   }

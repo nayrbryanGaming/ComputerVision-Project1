@@ -11,33 +11,35 @@ const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => 
   const [selectedImage, setSelectedImage] = useState<string>(defaultImageUrls[0]);
   const [noiseType, setNoiseType] = useState<'salt_pepper' | 'gaussian'>('salt_pepper');
   const [noiseDensity, setNoiseDensity] = useState(0.1);
-  const [filterType, setFilterType] = useState<'median' | 'mean'>('median');
-  const [filterSize, setFilterSize] = useState(3);
+  const [sigma, setSigma] = useState(1.5);
+  const [medianSize, setMedianSize] = useState(3);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showShareToast, setShowShareToast] = useState(false);
 
   const canvasRefs = {
     original: useRef<HTMLCanvasElement>(null),
     noisy: useRef<HTMLCanvasElement>(null),
-    filtered: useRef<HTMLCanvasElement>(null),
-    edge: useRef<HTMLCanvasElement>(null),
+    gaussian: useRef<HTMLCanvasElement>(null),
+    median: useRef<HTMLCanvasElement>(null),
+    edgeG: useRef<HTMLCanvasElement>(null),
+    edgeM: useRef<HTMLCanvasElement>(null),
   };
 
   // Sync state from URL hash on mount
   useEffect(() => {
-    const hash = window.location.hash.substring(1);
+    const hash = typeof window !== 'undefined' ? window.location.hash.substring(1) : '';
     if (hash) {
       const params = new URLSearchParams(hash);
       const nt = params.get('nt') as any;
       const nd = parseFloat(params.get('nd') || '0.1');
-      const ft = params.get('ft') as any;
-      const fs = parseInt(params.get('fs') || '3');
+      const sig = parseFloat(params.get('sig') || '1.5');
+      const ms = parseInt(params.get('ms') || '3');
       const imgIdx = parseInt(params.get('img') || '0');
 
       if (nt) setNoiseType(nt);
       if (nd) setNoiseDensity(nd);
-      if (ft) setFilterType(ft);
-      if (fs) setFilterSize(fs);
+      if (sig) setSigma(sig);
+      if (ms) setMedianSize(ms);
       if (defaultImageUrls[imgIdx]) setSelectedImage(defaultImageUrls[imgIdx]);
     }
   }, [defaultImageUrls]);
@@ -47,94 +49,97 @@ const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => 
     const params = new URLSearchParams();
     params.set('nt', noiseType);
     params.set('nd', noiseDensity.toString());
-    params.set('ft', filterType);
-    params.set('fs', filterSize.toString());
+    params.set('sig', sigma.toString());
+    params.set('ms', medianSize.toString());
     const imgIdx = defaultImageUrls.indexOf(selectedImage);
     if (imgIdx !== -1) params.set('img', imgIdx.toString());
     
-    // Use replaceState to avoid cluttering history
     const newHash = params.toString();
-    if (window.location.hash !== '#' + newHash) {
+    if (typeof window !== 'undefined' && window.location.hash !== '#' + newHash) {
       window.history.replaceState(null, '', '#' + newHash);
     }
-  }, [noiseType, noiseDensity, filterType, filterSize, selectedImage, defaultImageUrls]);
+  }, [noiseType, noiseDensity, sigma, medianSize, selectedImage, defaultImageUrls]);
 
   const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setShowShareToast(true);
-    setTimeout(() => setShowShareToast(false), 3000);
+    if (typeof navigator !== 'undefined') {
+      navigator.clipboard.writeText(window.location.href);
+      setShowShareToast(true);
+      setTimeout(() => setShowShareToast(false), 3000);
+    }
   };
 
-  const processImages = useCallback(async () => {
-    if (!canvasRefs.original.current) return;
+  const processImages = useCallback(async (baseWrapper: proc.ImageDataWrapper) => {
     setIsProcessing(true);
-
-    const ctxOrig = canvasRefs.original.current.getContext('2d');
-    if (!ctxOrig) return;
-
-    const { width, height } = canvasRefs.original.current;
-    const originalData = ctxOrig.getImageData(0, 0, width, height);
-    const wrapper: proc.ImageDataWrapper = {
-      data: originalData.data,
-      width,
-      height,
-    };
 
     // 1. Generate Noise
     let noisy: proc.ImageDataWrapper;
     if (noiseType === 'salt_pepper') {
-      noisy = proc.addSaltAndPepperNoise(wrapper, noiseDensity);
+      noisy = proc.addSaltAndPepperNoise(baseWrapper, noiseDensity);
     } else {
-      noisy = proc.addGaussianNoise(wrapper, noiseDensity * 50); // Scale density for gaussian
+      noisy = proc.addGaussianNoise(baseWrapper, noiseDensity * 50);
     }
 
-    // 2. Apply Filter
-    let filtered: proc.ImageDataWrapper;
-    if (filterType === 'median') {
-      filtered = proc.applyMedianFilter(noisy, filterSize);
-    } else {
-      filtered = proc.applyMeanFilter(noisy, filterSize);
-    }
+    // 2. Apply Filters (PIPELINE STEP 3)
+    const gaussianFiltered = proc.applyGaussianFilter(noisy, sigma);
+    const medianFiltered = proc.applyMedianFilter(noisy, medianSize);
 
-    // 3. Edge Detection
-    const edges = proc.applySobelOperator(filtered);
+    // 3. Edge Detection (PIPELINE STEP 4)
+    const edgesG = proc.applySobelOperator(gaussianFiltered);
+    const edgesM = proc.applySobelOperator(medianFiltered);
 
     // Render to canvases
     const render = (ref: React.RefObject<HTMLCanvasElement | null>, data: proc.ImageDataWrapper) => {
       if (ref.current) {
+        ref.current.width = data.width;
+        ref.current.height = data.height;
         const ctx = ref.current.getContext('2d');
         if (ctx) {
-          const imgData = new ImageData(data.data as any, data.width, data.height);
+          // FIX: Explicit cast and new instance to avoid TypeScript errors in some environments
+          const imgData = new ImageData(new Uint8ClampedArray(data.data), data.width, data.height);
           ctx.putImageData(imgData, 0, 0);
         }
       }
     };
 
     render(canvasRefs.noisy, noisy);
-    render(canvasRefs.filtered, filtered);
-    render(canvasRefs.edge, edges);
+    render(canvasRefs.gaussian, gaussianFiltered);
+    render(canvasRefs.median, medianFiltered);
+    render(canvasRefs.edgeG, edgesG);
+    render(canvasRefs.edgeM, edgesM);
 
     setIsProcessing(false);
-  }, [noiseType, noiseDensity, filterType, filterSize]);
+  }, [noiseType, noiseDensity, sigma, medianSize]);
 
   useEffect(() => {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.src = selectedImage;
     img.onload = () => {
-      const canvases = Object.values(canvasRefs);
-      canvases.forEach(ref => {
-        if (ref.current) {
-          ref.current.width = img.width;
-          ref.current.height = img.height;
-        }
-      });
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = img.width;
+      tempCanvas.height = img.height;
+      const ctx = tempCanvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+      
+      let wrapper: proc.ImageDataWrapper = {
+        data: ctx.getImageData(0, 0, img.width, img.height).data,
+        width: img.width,
+        height: img.height,
+      };
 
-      const ctx = canvasRefs.original.current?.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(img, 0, 0);
-        processImages();
+      // CRITICAL: Resizing for performance optimization
+      wrapper = proc.resizeImageData(wrapper, 600);
+
+      if (canvasRefs.original.current) {
+        canvasRefs.original.current.width = wrapper.width;
+        canvasRefs.original.current.height = wrapper.height;
+        const oCtx = canvasRefs.original.current.getContext('2d');
+        if (oCtx) {
+          oCtx.putImageData(new ImageData(new Uint8ClampedArray(wrapper.data), wrapper.width, wrapper.height), 0, 0);
+        }
       }
+
+      processImages(wrapper);
     };
   }, [selectedImage, processImages]);
 
@@ -152,186 +157,145 @@ const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => 
   };
 
   return (
-    <div className="animate-fade-in">
-      <div className="glass-card p-6 md:p-10 mb-10 text-center relative overflow-hidden">
-        {/* Decorative background element */}
+    <div className="animate-fade-in space-y-12 pb-20">
+      {/* Header Controls */}
+      <div className="glass-card p-6 md:p-10 text-center relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500 opacity-5 blur-[100px] -mr-32 -mt-32"></div>
-        
-        <div className="flex flex-col items-center gap-4 relative z-10">
-          <div className="p-4 rounded-full bg-cyan-500 bg-opacity-10 mb-2 border border-cyan-500 border-opacity-20">
+        <div className="flex flex-col items-center gap-6 relative z-10">
+          <div className="p-4 rounded-full bg-cyan-500 bg-opacity-10 border border-cyan-500 border-opacity-20 shadow-lg shadow-cyan-500/10">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-cyan-400">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
             </svg>
           </div>
-          <h3 className="text-2xl font-bold tracking-tight">Real-Time CV Experimentation</h3>
-          <p className="text-sm opacity-60 max-w-lg">Pilih gambar default atau unggah file Anda sendiri untuk memulai analisis citra secara instan. Hasil akan diperbarui secara real-time saat Anda mengubah parameter.</p>
+          <div>
+            <h3 className="text-3xl font-extrabold tracking-tight mb-2">Real-Time CV Experimentation</h3>
+            <p className="text-sm opacity-60 max-w-2xl mx-auto">Pipeline: Original → Noise → Filtering (Gaussian & Median) → Edge Detection (Sobel). Hasil akan diperbarui secara instan.</p>
+          </div>
           
-          <div className="flex flex-wrap justify-center gap-3 mt-6">
+          <div className="flex flex-wrap justify-center gap-4">
             <label className="cursor-pointer">
-              <input 
-                type="file" 
-                className="hidden" 
-                accept="image/*" 
-                onChange={handleUpload}
-              />
-              <span className="button bg-cyan-600 hover:bg-cyan-500 flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all shadow-lg shadow-cyan-900/20">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <input type="file" className="hidden" accept="image/*" onChange={handleUpload} />
+              <span className="button bg-cyan-600 hover:bg-cyan-500 flex items-center gap-2 px-8 py-4 rounded-2xl font-bold transition-all shadow-xl shadow-cyan-900/30">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 Upload Gambar
               </span>
             </label>
 
             {defaultImageUrls.map((url, i) => (
-              <button 
-                key={i} 
-                className={`bg-white hover:bg-opacity-10 border border-white transition-all ${selectedImage === url ? 'bg-opacity-20 border-opacity-40' : 'bg-opacity-5 border-opacity-10'}`} 
-                onClick={() => setSelectedImage(url)}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <button key={i} className={`bg-white hover:bg-opacity-10 border border-white transition-all px-6 py-4 rounded-2xl font-bold ${selectedImage === url ? 'bg-opacity-20 border-opacity-40' : 'bg-opacity-5 border-opacity-10'}`} onClick={() => setSelectedImage(url)}>
                 Contoh {i + 1}
               </button>
             ))}
 
-            <button 
-              className="bg-purple-600 hover:bg-purple-500 flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all shadow-lg shadow-purple-900/20"
-              onClick={handleShare}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-              Lock & Share Link
+            <button className="bg-purple-600 hover:bg-purple-500 flex items-center gap-2 px-8 py-4 rounded-2xl font-bold transition-all shadow-xl shadow-purple-900/30" onClick={handleShare}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              Lock Demo State
             </button>
           </div>
           
           {showShareToast && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-green-500 text-white text-xs font-bold px-4 py-2 rounded-full animate-bounce shadow-xl">
+            <div className="absolute top-4 right-4 bg-green-500 text-white text-xs font-bold px-6 py-3 rounded-full animate-bounce shadow-2xl">
               Link Berhasil Disalin!
             </div>
           )}
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-4 md:grid-cols-2 grid-cols-1 gap-6">
-        <Card title="1. Original Image" ref={canvasRefs.original} />
-        <Card title={`2. Noisy (${noiseType.replace('_', ' ')})`} ref={canvasRefs.noisy} />
-        <Card title={`3. Filtered (${filterType})`} ref={canvasRefs.filtered} />
-        <Card title="4. Edge Detection (Sobel)" ref={canvasRefs.edge} accent />
+      {/* Main Pipeline Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <Card title="1. Original Image" ref={canvasRefs.original} desc="Citra asli (Baseline)" />
+        <Card title={`2. Noisy Citra (${noiseType})`} ref={canvasRefs.noisy} desc={`Artifisial noise ${(noiseDensity*100).toFixed(0)}%`} />
+        <Card title="3. Gaussian Filter (Exp A)" ref={canvasRefs.gaussian} desc="Mereduksi noise dengan pembobotan spasial" />
+        <Card title="4. Median Filter (Exp B)" ref={canvasRefs.median} desc="Mereduksi noise dengan nilai tengah window" />
+        <Card title="5. Sobel Edge (dari Exp A)" ref={canvasRefs.edgeG} desc="Deteksi tepi setelah Filter Gaussian" accent />
+        <Card title="6. Sobel Edge (dari Exp B)" ref={canvasRefs.edgeM} desc="Deteksi tepi setelah Filter Median" accent />
       </div>
 
-      <div className="glass-card p-6 md:p-10 mt-10 grid lg:grid-cols-2 gap-10">
-        <div className="controls">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-lg bg-cyan-500 bg-opacity-10 flex items-center justify-center border border-cyan-500 border-opacity-20">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-cyan-400"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1V15a2 2 0 0 1-2-2 2 2 0 0 1 2-2v-.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      {/* Parameters & Analysis */}
+      <div className="grid lg:grid-cols-3 gap-8">
+        <div className="glass-card p-8 lg:col-span-1 space-y-8">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-cyan-400"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1V15a2 2 0 0 1-2-2 2 2 0 0 1 2-2v-.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             </div>
-            <h3 className="text-xl font-bold">Parameter Kontrol</h3>
+            <h3 className="text-xl font-bold">Control Panel</h3>
           </div>
-          
-          <div className="space-y-8">
-            <div className="control-group">
-              <span className="label uppercase text-[10px] tracking-widest mb-2 inline-block">Jenis Noise Citra</span>
+
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40">Noise Configuration</span>
               <div className="flex gap-2">
-                <button 
-                  className={`flex-1 ${noiseType === 'salt_pepper' ? 'bg-cyan-600 shadow-lg shadow-cyan-900/30' : 'bg-white bg-opacity-5 opacity-40 hover:opacity-100 hover:bg-opacity-10'}`} 
-                  onClick={() => setNoiseType('salt_pepper')}
-                >
-                  Salt & Pepper
-                </button>
-                <button 
-                  className={`flex-1 ${noiseType === 'gaussian' ? 'bg-cyan-600 shadow-lg shadow-cyan-900/30' : 'bg-white bg-opacity-5 opacity-40 hover:opacity-100 hover:bg-opacity-10'}`} 
-                  onClick={() => setNoiseType('gaussian')}
-                >
-                  Gaussian
-                </button>
+                {['salt_pepper', 'gaussian'].map(t => (
+                  <button key={t} onClick={() => setNoiseType(t as any)} className={`flex-1 text-xs py-3 rounded-xl border transition-all ${noiseType === t ? 'bg-cyan-600 border-cyan-400 shadow-lg shadow-cyan-900/20' : 'bg-white/5 border-white/10 opacity-50 hover:opacity-100'}`}>
+                    {t.replace('_', ' ').toUpperCase()}
+                  </button>
+                ))}
+              </div>
+              <div className="pt-2">
+                <div className="flex justify-between text-[10px] font-bold mb-2">
+                  <span className="opacity-40">INTENSITY</span>
+                  <span className="text-cyan-400">{Math.round(noiseDensity * 100)}%</span>
+                </div>
+                <input type="range" min="0.1" max="0.3" step="0.01" value={noiseDensity} onChange={e => setNoiseDensity(parseFloat(e.target.value))} className="w-full" />
               </div>
             </div>
 
-            <div className="control-group">
-              <div className="flex justify-between items-center mb-1">
-                <span className="label uppercase text-[10px] tracking-widest">Intensitas Noise</span>
-                <span className="text-cyan-400 font-bold text-xs bg-cyan-500 bg-opacity-10 px-2 py-0.5 rounded">{(noiseDensity * 100).toFixed(0)}%</span>
+            <div className="space-y-3">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40">Gaussian Sigma (Filter A)</span>
+              <div className="flex justify-between text-[10px] font-bold mb-2">
+                <span className="opacity-40">SIGMA (σ)</span>
+                <span className="text-cyan-400">{sigma.toFixed(1)}</span>
               </div>
-              <input 
-                type="range" min="0.01" max="0.3" step="0.01" 
-                value={noiseDensity} 
-                onChange={(e) => setNoiseDensity(parseFloat(e.target.value))} 
-                className="w-full cursor-pointer h-1.5 bg-white/10 rounded-lg appearance-none"
-              />
+              <input type="range" min="0.5" max="3" step="0.1" value={sigma} onChange={e => setSigma(parseFloat(e.target.value))} className="w-full" />
             </div>
 
-            <div className="control-group">
-              <span className="label uppercase text-[10px] tracking-widest mb-2 inline-block">Metode Reduksi Noise</span>
-              <div className="flex gap-2">
-                <button 
-                  className={`flex-1 ${filterType === 'median' ? 'bg-purple-600 shadow-lg shadow-purple-900/30' : 'bg-white bg-opacity-5 opacity-40 hover:opacity-100 hover:bg-opacity-10'}`} 
-                  onClick={() => setFilterType('median')}
-                >
-                  Median Filter
-                </button>
-                <button 
-                  className={`flex-1 ${filterType === 'mean' ? 'bg-purple-600 shadow-lg shadow-purple-900/30' : 'bg-white bg-opacity-5 opacity-40 hover:opacity-100 hover:bg-opacity-10'}`} 
-                  onClick={() => setFilterType('mean')}
-                >
-                  Mean Filter
-                </button>
+            <div className="space-y-3">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40">Median Size (Filter B)</span>
+              <div className="flex justify-between text-[10px] font-bold mb-2">
+                <span className="opacity-40">KERNEL</span>
+                <span className="text-purple-400">{medianSize}x{medianSize}</span>
               </div>
-            </div>
-
-            <div className="control-group">
-              <div className="flex justify-between items-center mb-1">
-                <span className="label uppercase text-[10px] tracking-widest">Ukuran Kernel (Matrix)</span>
-                <span className="text-purple-400 font-bold text-xs bg-purple-500 bg-opacity-10 px-2 py-0.5 rounded">{filterSize}x{filterSize}</span>
-              </div>
-              <input 
-                type="range" min="3" max="7" step="2" 
-                value={filterSize} 
-                onChange={(e) => setFilterSize(parseInt(e.target.value))} 
-                className="w-full cursor-pointer h-1.5 bg-white/10 rounded-lg appearance-none"
-              />
+              <input type="range" min="3" max="7" step="2" value={medianSize} onChange={e => setMedianSize(parseInt(e.target.value))} className="w-full" />
             </div>
           </div>
         </div>
 
-        <div className="analysis border-l border-white border-opacity-5 pl-0 lg:pl-10">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-lg bg-purple-500 bg-opacity-10 flex items-center justify-center border border-purple-500 border-opacity-20">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12H10"/></svg>
+        <div className="glass-card p-8 lg:col-span-2 space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12H10"/></svg>
             </div>
-            <h3 className="text-xl font-bold">Analisis Eksperimen</h3>
+            <h3 className="text-xl font-bold">Analisis Akademis</h3>
           </div>
-          <div className="space-y-6 text-sm opacity-90 leading-relaxed">
-            <div className="bg-white bg-opacity-[0.03] p-6 rounded-2xl border border-white border-opacity-5 hover:bg-opacity-[0.05] transition-all">
-              <h5 className="text-cyan-400 font-bold mb-2 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-                Efektivitas Filtering
-              </h5>
-              <p className="opacity-70">
-                {noiseType === 'salt_pepper' 
-                  ? "Untuk Salt & Pepper noise, Median Filter jauh lebih efektif karena ia mengambil nilai tengah dari tetangga, sehingga outlier (pixel hitam/putih murni) akan tereliminasi sepenuhnya tanpa mengaburkan detail."
-                  : "Untuk Gaussian noise, Mean Filter memberikan hasil yang lebih halus namun cenderung mengaburkan (blur) gambar. Median filter kurang efektif karena Gaussian noise terdistribusi merata di semua pixel."
-                }
+          
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="bg-white/5 p-6 rounded-2xl border border-white/5 hover:bg-white/[0.08] transition-all">
+              <h4 className="text-sm font-bold text-cyan-400 mb-3">Efektivitas Filter A</h4>
+              <p className="text-xs opacity-60 leading-relaxed">
+                Filter Gaussian sangat efektif untuk Gaussian noise karena mengikuti distribusi normal. Filter ini menghaluskan citra namun dapat mengaburkan tepi jika sigma terlalu besar.
               </p>
             </div>
-
-            <div className="bg-white bg-opacity-[0.03] p-6 rounded-2xl border border-white border-opacity-5 hover:bg-opacity-[0.05] transition-all">
-              <h5 className="text-purple-400 font-bold mb-2 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
-                Kinerja Deteksi Tepi
-              </h5>
-              <p className="opacity-70">
-                Sobel operator sangat sensitif terhadap noise. 
-                {noiseDensity > 0.15 
-                  ? " Intensitas noise yang tinggi (>15%) menghasilkan banyak 'false edges' (artefak) jika tidak difilter. Terlihat pada hasil deteksi tepi yang kotor di area background." 
-                  : " Dengan filtering yang tepat, garis tepi objek utama terlihat jelas dan kontras, meminimalisir noise gradient yang mengganggu."}
+            <div className="bg-white/5 p-6 rounded-2xl border border-white/5 hover:bg-white/[0.08] transition-all">
+              <h4 className="text-sm font-bold text-purple-400 mb-3">Efektivitas Filter B</h4>
+              <p className="text-xs opacity-60 leading-relaxed">
+                Filter Median sangat superior untuk Salt & Pepper noise. Karena non-linear, ia mampu membuang outlier tanpa merusak ketajaman tepi citra secara signifikan.
               </p>
             </div>
+          </div>
 
-            <div className="pt-2 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className={`w-2.5 h-2.5 rounded-full ${isProcessing ? 'bg-yellow-400 animate-pulse' : 'bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.5)]'}`}></div>
-                <span className="text-[10px] uppercase tracking-tighter opacity-50 font-bold">Engine Status: {isProcessing ? 'Processing' : 'Standby'}</span>
-              </div>
-              <div className="text-[10px] uppercase tracking-tighter opacity-30 font-bold">
-                Manual Implementation v1.0
-              </div>
-            </div>
+          <div className="bg-gradient-to-r from-cyan-900/20 to-purple-900/20 p-6 rounded-2xl border border-white/10">
+            <h4 className="text-sm font-bold mb-3">Impact on Edge Detection (Sobel)</h4>
+            <p className="text-xs opacity-70 leading-relaxed">
+              Tanpa filtering, Sobel akan mendeteksi noise sebagai garis tepi (False Edges). Perbandingan antara Edge A dan Edge B menunjukkan bahwa pemilihan filter yang tepat sebelum deteksi tepi sangat krusial untuk mendapatkan ekstraksi fitur yang akurat dan bersih dari artefak.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between pt-4">
+             <div className="flex items-center gap-3">
+                <div className={`w-3 h-3 rounded-full ${isProcessing ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'}`}></div>
+                <span className="text-[10px] font-bold uppercase tracking-widest opacity-50">Status: {isProcessing ? 'PROCESSING...' : 'READY'}</span>
+             </div>
+             <span className="text-[10px] font-bold opacity-30 tracking-widest">REAL-TIME ENGINE v2.5</span>
           </div>
         </div>
       </div>
@@ -339,9 +303,12 @@ const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({ defaultImageUrls }) => 
   );
 };
 
-const Card = React.forwardRef<HTMLCanvasElement, { title: string; accent?: boolean }>(({ title, accent }, ref) => (
-  <div className={`glass-card p-4 flex flex-col gap-4 ${accent ? 'border-accent border-opacity-50' : ''}`}>
-    <h4 className="text-center font-bold text-sm uppercase tracking-wider">{title}</h4>
+const Card = React.forwardRef<HTMLCanvasElement, { title: string; desc?: string; accent?: boolean }>(({ title, desc, accent }, ref) => (
+  <div className={`glass-card p-4 flex flex-col gap-4 ${accent ? 'border-purple-500/40' : ''} hover:scale-[1.02] transition-all`}>
+    <div className="space-y-1">
+      <h4 className="text-center font-black text-xs uppercase tracking-widest text-white/90">{title}</h4>
+      {desc && <p className="text-[9px] text-center opacity-40 uppercase tracking-tighter">{desc}</p>}
+    </div>
     <div className="canvas-container">
       <canvas ref={ref} />
     </div>
