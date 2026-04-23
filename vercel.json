@@ -1,4 +1,8 @@
 {
   "cleanUrls": true,
-  "trailingSlash": false
+  "framework": "nextjs",
+  "regions": ["sin1"],
+  "deploymentProtection": {
+    "protectionMode": "off"
+  }
 }
