@@ -1,36 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Computer Vision Project 1: Noise, Filtering & Edge Detection
 
-## Getting Started
+Advanced Image Processing Dashboard built with **Next.js 16** and **Pure Python (FastAPI)**.
 
-First, run the development server:
+## 🚀 Key Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Premium UI/UX**: Built with a high-end "Cyber-CV" aesthetic, glassmorphism, and responsive stage-based grid.
+- **Pure Python Logic**: Unlike standard CV apps, this project implements Gaussian Filter, Median Filter, and Sobel Edge Detection **manually** using NumPy to demonstrate deep understanding of convolution kernels.
+- **Real-time Pipeline**: Upload any image and watch the multi-stage transformation in real-time.
+- **Mobile Optimized**: Fully responsive design for presentation on any device.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🛠️ Architecture
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Frontend**: Next.js 16 (App Router), Tailwind CSS v4.
+- **Backend**: Python 3.11+, FastAPI (Vercel Serverless Functions).
+- **Core Logic**: Manual NumPy implementation for academic integrity.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🧠 CV Algorithms Implemented
 
-## Learn More
+1. **Gaussian Noise**: Additive white noise using normal distribution.
+2. **Salt & Pepper**: Impulsive noise via random pixel substitution.
+3. **Gaussian Filter**: Manual 2D Convolution with dynamic **Sigma** control (range 0.5 - 5.0).
+4. **Median Filter**: Non-linear sliding window with dynamic **Kernel Size** (3x3 to 11x11).
+5. **Sobel Edge Detection**: Gradient-based edge discovery via X/Y convolution kernels. Optimized for high-contrast scenes like the provided "Night City" samples.
 
-To learn more about Next.js, take a look at the following resources:
+## 👨‍💻 Team - Kelompok 5
+- 2361020 – VENILIA DINA MINARTI
+- 2361021 – VINCENTIUS BRYAN KWANDOU
+- 2361022 – VINCENTLEE EDBERT MARKIONES
+- 2361023 – RENDY ALFIN MAMINTADA
+- 2361024 – FELISITAS NATASYA LADY CLAUDIA
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+*Deployed on Vercel*

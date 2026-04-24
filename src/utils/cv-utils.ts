@@ -5,12 +5,16 @@ export interface ImageState {
   filterB: string;
   edgeA: string;
   edgeB: string;
+  timings?: any;
+  total_ms?: number;
 }
 
 export async function processImagePython(
   file: File | string,
   noiseType: 'gaussian' | 'salt_and_pepper',
-  intensity: number
+  intensity: number,
+  sigma: number = 1.0,
+  kernelSize: int = 5
 ): Promise<ImageState> {
   // Load and resize image first to avoid sending giant payloads to the server
   const img = await loadImage(file);
@@ -42,7 +46,9 @@ export async function processImagePython(
     body: JSON.stringify({
       image_base64: originalUrl,
       noise_type: noiseType,
-      intensity: intensity
+      intensity: intensity,
+      sigma: sigma,
+      kernel_size: kernelSize
     }),
   });
 
@@ -60,6 +66,8 @@ export async function processImagePython(
     filterB: result.filterB,
     edgeA: result.edgeA,
     edgeB: result.edgeB,
+    timings: result.timings,
+    total_ms: result.total_ms
   };
 }
 

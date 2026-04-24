@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Computer Vision Lab | Kelompok 5",
-  description: "Tugas 1: Analisis dan Eksperimen metode filtering dan deteksi tepi",
+  title: "CV Analytics Engine • Kelompok 5",
+  description: "Advanced Computer Vision experimentation platform for noise analysis, filtering, and edge detection.",
 };
 
 export default function RootLayout({
