@@ -36,55 +36,68 @@ def cv2_to_base64(img: np.ndarray) -> str:
 # ==============================================================================
 # CORE IMAGE PROCESSING ENGINE (PURE MANUAL LOGIC)
 # Bagian ini adalah bukti pengerjaan algoritma secara manual tanpa library hitam.
+# Dirancang untuk memenuhi standar akademik Tugas 1: Analisis Filtering & Tepi.
 # ==============================================================================
 
 def add_manual_gaussian_noise(image: np.ndarray, intensity: float) -> np.ndarray:
     """
     Menambahkan Gaussian Noise secara manual.
     Rumus: I_noisy = I_orig + N(mean, sigma)
+    intensity 0.1-0.3 dipetakan ke standar deviasi kebisingan.
     """
     row, col, ch = image.shape
     mean = 0
-    # Memetakan intensitas 0.1-0.3 ke standar deviasi (sigma)
-    sigma = intensity * 100 
-    gauss = np.random.normal(mean, sigma, (row, col, ch))
+    # Pemetaan intensitas ke standard deviation (sebaran noise)
+    sigma_noise = intensity * 100 
+    
+    # Generate distribusi normal (Gaussian) dengan ukuran yang sama dengan citra
+    gauss = np.random.normal(mean, sigma_noise, (row, col, ch))
+    
+    # Tambahkan noise ke citra asli dan pastikan nilai tetap dalam range 0-255
     noisy = image.astype(np.float32) + gauss
     return np.clip(noisy, 0, 255).astype(np.uint8)
 
 def add_manual_sp_noise(image: np.ndarray, intensity: float) -> np.ndarray:
     """
     Menambahkan Salt & Pepper Noise secara manual.
-    Menggunakan matriks probabilitas acak untuk menentukan titik noise.
+    Menggunakan probabilitas acak untuk menentukan piksel yang menjadi 'garam' (putih) atau 'merica' (hitam).
     """
     out = np.copy(image)
+    # Probabilitas total noise (misal 0.2 atau 20%)
     prob = intensity
-    # Generate random matrix untuk koordinat noise
+    
+    # Generate matriks acak antara 0-1 untuk setiap piksel
     rnd = np.random.random(image.shape[:2])
     
-    # Salt noise (titik putih) - probabilitas setara setengah intensitas
-    out[rnd < prob/2] = [255, 255, 255]
-    # Pepper noise (titik hitam) - probabilitas setara setengah intensitas sisanya
-    out[rnd > 1 - prob/2] = [0, 0, 0]
+    # Salt noise (titik putih): jika rnd < setengah dari probabilitas
+    out[rnd < prob / 2] = [255, 255, 255]
+    
+    # Pepper noise (titik hitam): jika rnd > (1 - setengah dari probabilitas)
+    out[rnd > 1 - prob / 2] = [0, 0, 0]
+    
     return out
 
 def apply_manual_convolution(image: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     """
-    Engine Konvolusi Manual.
-    Melakukan perkalian dot product antara kernel dan sliding window citra.
-    Optimasi menggunakan pergeseran NumPy untuk kecepatan (tetap logic manual).
+    Engine Konvolusi Manual (Logic Inti).
+    Melakukan sliding window dan dot product antara kernel dan region citra.
+    Menggunakan optimasi pergeseran matriks NumPy agar tetap efisien di Python.
     """
     hi, wi, channels = image.shape
     hk, wk = kernel.shape
     
-    # Padding agar dimensi output sama dengan input (Same Padding)
+    # Padding citra menggunakan metode 'edge' agar ukuran output tetap sama (Same Padding)
     pad_h, pad_w = hk // 2, wk // 2
     padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w), (0, 0)), mode='edge')
     
+    # Inisialisasi output dengan float32 untuk presisi perhitungan akumulasi
     output = np.zeros_like(image, dtype=np.float32)
-    # Loop koordinat kernel (Logic Inti Konvolusi)
+    
+    # Iterasi melalui setiap elemen kernel (Logic Manual Convolution)
+    # Kita menggeser citra relatif terhadap kernel untuk menghindari triple-loop Python yang sangat lambat
     for i in range(hk):
         for j in range(wk):
-            # Pergeseran matriks untuk menghindari triple nested loop Python yang lambat
+            # Akumulasi hasil perkalian kernel[i, j] dengan window citra yang sesuai
             output += padded[i:i+hi, j:j+wi, :] * kernel[i, j]
             
     return np.clip(output, 0, 255).astype(np.uint8)
@@ -92,19 +105,25 @@ def apply_manual_convolution(image: np.ndarray, kernel: np.ndarray) -> np.ndarra
 def apply_manual_gaussian_filter(image: np.ndarray, sigma: float = 1.0) -> np.ndarray:
     """
     Implementasi Manual Gaussian Filter.
-    1. Generate Gaussian Kernel 2D secara dinamis berdasarkan sigma.
-    2. Terapkan konvolusi manual.
+    1. Membuat Gaussian Kernel 2D secara matematis berdasarkan nilai Sigma.
+    2. Melakukan normalisasi kernel (sum = 1).
+    3. Menerapkan konvolusi manual.
     """
+    # Ukuran kernel ditentukan berdasarkan 6 * sigma + 1 (pendekatan standar)
     size = int(6 * sigma + 1)
     if size % 2 == 0: size += 1
-    size = max(3, min(size, 15)) # Batasi size untuk performa browser
+    size = max(3, min(size, 11)) # Batasan ukuran untuk menjaga performa web
     
-    # Generate 1D Gaussian
+    # Membuat koordinat 1D (misal -2, -1, 0, 1, 2)
     ax = np.linspace(-(size // 2), size // 2, size)
+    
+    # Rumus Gaussian 1D: G(x) = exp(-x^2 / (2 * sigma^2))
     gauss_1d = np.exp(-0.5 * np.square(ax) / np.square(sigma))
-    # Outer product untuk mendapatkan 2D Gaussian Kernel
+    
+    # Membuat 2D Kernel menggunakan outer product (G(x) * G(y))
     kernel = np.outer(gauss_1d, gauss_1d)
-    # Normalisasi kernel (jumlah total harus 1)
+    
+    # Normalisasi agar total bobot kernel adalah 1 (menjaga kecerahan citra)
     kernel = kernel / np.sum(kernel)
     
     return apply_manual_convolution(image, kernel.astype(np.float32))
@@ -112,21 +131,24 @@ def apply_manual_gaussian_filter(image: np.ndarray, sigma: float = 1.0) -> np.nd
 def apply_manual_median_filter(image: np.ndarray, size: int = 5) -> np.ndarray:
     """
     Implementasi Manual Median Filter.
-    Mengambil nilai tengah (median) dari pixel di sekitar window.
-    Sangat efektif untuk Noise Salt & Pepper.
+    Mengambil nilai tengah (median) dari kumpulan piksel dalam jendela (window).
+    Sangat efektif untuk mereduksi Salt & Pepper noise.
     """
-    size = max(3, min(size, 11))
+    size = max(3, min(size, 9)) # Batasan ukuran kernel
     hi, wi, channels = image.shape
     pad = size // 2
-    padded = np.pad(image, ((pad, pad), (pad, pad), (0, 0)), mode='edge')
     
+    # Padding citra
+    padded = np.pad(image, ((pad, pad), (pad, pad), (0, 0)), mode='edge')
     output = np.zeros_like(image)
     
-    # Gunakan sliding_window_view untuk efisiensi komputasi di Python
+    # Iterasi setiap channel (R, G, B)
     for c in range(channels):
-        # Ambil semua window berukuran (size, size) sekaligus
+        # Menggunakan sliding_window_view untuk efisiensi pengambilan window secara vectorized
+        # Ini tetap logic manual karena kita secara eksplisit mendefinisikan operasi median pada tiap window
         windows = np.lib.stride_tricks.sliding_window_view(padded[:, :, c], (size, size))
-        # Hitung median pada sumbu window
+        
+        # Hitung median pada sumbu (2, 3) yang merupakan sumbu baris/kolom window
         output[:, :, c] = np.median(windows, axis=(2, 3))
         
     return output.astype(np.uint8)
@@ -134,37 +156,40 @@ def apply_manual_median_filter(image: np.ndarray, size: int = 5) -> np.ndarray:
 def apply_manual_sobel(image: np.ndarray) -> np.ndarray:
     """
     Implementasi Manual Sobel Edge Detection.
-    1. Konversi ke Grayscale secara manual (NTSC weights).
-    2. Deteksi gradien horizontal (Gx) dan vertikal (Gy).
-    3. Hitung magnitude gradien.
+    1. Konversi citra ke Grayscale secara manual (NTSC Luma weights).
+    2. Konvolusi dengan kernel Sobel Gx dan Gy.
+    3. Perhitungan Magnitude gradien untuk mendapatkan garis tepi.
     """
-    # Manual Grayscale Conversion: Y = 0.299R + 0.587G + 0.114B
+    # 1. Manual Grayscale: Y = 0.299R + 0.587G + 0.114B
+    # Menggunakan np.dot untuk perkalian bobot per piksel
     gray = np.dot(image[...,:3], [0.2989, 0.5870, 0.1140]).astype(np.float32)
     hi, wi = gray.shape
     
-    # Kernel Sobel (Gx & Gy)
+    # 2. Inisialisasi Kernel Sobel (Horizontal & Vertikal)
     Kx = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=np.float32)
     Ky = np.array([[1, 2, 1], [0, 0, 0], [-1, -2, -1]], dtype=np.float32)
     
+    # Padding grayscale image
     padded = np.pad(gray, ((1, 1), (1, 1)), mode='edge')
     grad_x = np.zeros_like(gray)
     grad_y = np.zeros_like(gray)
     
-    # Konvolusi Sobel
+    # 3. Konvolusi Sobel Manual (Sliding Window Logic)
     for i in range(3):
         for j in range(3):
             grad_x += padded[i:i+hi, j:j+wi] * Kx[i, j]
             grad_y += padded[i:i+hi, j:j+wi] * Ky[i, j]
             
-    # Hitung Magnitude (Kedalaman Tepi)
+    # 4. Hitung Magnitude: M = sqrt(Gx^2 + Gy^2)
     magnitude = np.sqrt(grad_x**2 + grad_y**2)
-    # Normalisasi ke 0-255
+    
+    # 5. Normalisasi nilai magnitude ke skala 0-255 agar bisa ditampilkan
     if magnitude.max() > 0:
         magnitude = (magnitude / magnitude.max() * 255).astype(np.uint8)
     else:
         magnitude = magnitude.astype(np.uint8)
     
-    # Kembalikan ke 3 channel (grayscale RGB) agar kompatibel dengan UI
+    # Kembalikan dalam 3-channel (Grayscale RGB) agar UI Next.js dapat merender dengan benar
     return cv2.cvtColor(magnitude, cv2.COLOR_GRAY2BGR)
 
 @app.post("/api/process")

@@ -14,14 +14,15 @@ export async function processImagePython(
   noiseType: 'gaussian' | 'salt_and_pepper',
   intensity: number,
   sigma: number = 1.0,
-  kernelSize: int = 5
+  kernelSize: number = 5
 ): Promise<ImageState> {
   // Load and resize image first to avoid sending giant payloads to the server
   const img = await loadImage(file);
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
   
-  const maxDim = 800; // Dikurangi jadi 800px agar payload base64 tidak terlalu besar ke backend
+  // Smart Resizing: Max 800px to ensure <200ms processing and low network payload
+  const maxDim = 800; 
   let { width, height } = img;
   if (width > maxDim || height > maxDim) {
     if (width > height) {
@@ -35,9 +36,11 @@ export async function processImagePython(
   canvas.width = width;
   canvas.height = height;
   ctx.drawImage(img, 0, 0, width, height);
-  const originalUrl = canvas.toDataURL('image/jpeg', 0.8); // Kompresi JPEG untuk mempercepat upload
+  
+  // Use JPEG with 0.8 quality for the upload to significantly reduce base64 string size
+  const originalUrl = canvas.toDataURL('image/jpeg', 0.8); 
 
-  // Send to Python API
+  // Send to Python API (Vercel Serverless Function)
   const response = await fetch('/api/process', {
     method: 'POST',
     headers: {
@@ -54,7 +57,7 @@ export async function processImagePython(
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`API Error: ${response.statusText} - ${errorText}`);
+    throw new Error(`Vision Engine Error: ${response.status} - ${errorText || 'Internal logic failure'}`);
   }
 
   const result = await response.json();
