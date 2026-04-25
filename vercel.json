@@ -1,9 +1,10 @@
 {
   "version": 2,
   "functions": {
-    "api/process.py": { "runtime": "python3.12", "maxDuration": 30 },
+    "api/process.py":       { "runtime": "python3.12", "maxDuration": 30 },
     "api/default_image.py": { "runtime": "python3.12", "maxDuration": 10 },
-    "api/health.py": { "runtime": "python3.12", "maxDuration": 5 }
+    "api/health.py":        { "runtime": "python3.12", "maxDuration": 5  },
+    "api/ping.py":          { "runtime": "python3.12", "maxDuration": 5  }
   },
   "rewrites": [
     { "source": "/api/default-image", "destination": "/api/default_image" }
