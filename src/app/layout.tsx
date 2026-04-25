@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Computer Vision: Edge Detection & Filtering",
-  description: "Assignment 1: Noise, Filtering and Edge Detection Analysis - Kelompok 5",
+  title: "CV Pipeline Demo — Kelompok 5",
+  description: "Demo interaktif: Gaussian Noise, Salt & Pepper Noise, Gaussian Filter, Median Filter, Sobel, Prewitt, LoG, Canny — Kelompok 5 Computer Vision.",
 };
 
 export default function RootLayout({
