@@ -1,37 +1,12 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/*.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "package.json",
-      "use": "@vercel/next"
-    }
+  "functions": {
+    "api/process.py": { "runtime": "python3.12", "maxDuration": 30 },
+    "api/default_image.py": { "runtime": "python3.12", "maxDuration": 10 },
+    "api/health.py": { "runtime": "python3.12", "maxDuration": 5 }
+  },
+  "rewrites": [
+    { "source": "/api/default-image", "destination": "/api/default_image" }
   ],
-  "routes": [
-    {
-      "src": "/api/default-image",
-      "dest": "/api/default_image.py"
-    },
-    {
-      "src": "/api/default_image",
-      "dest": "/api/default_image.py"
-    },
-    {
-      "src": "/api/health",
-      "dest": "/api/health.py"
-    },
-    {
-      "src": "/api/process",
-      "dest": "/api/process.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
-    }
-  ],
-  "regions": ["sin1"],
-  "alias": ["computervision-kelompok5-1.vercel.app"]
+  "regions": ["sin1"]
 }
